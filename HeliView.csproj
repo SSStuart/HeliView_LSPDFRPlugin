@@ -54,6 +54,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="IniFile.cs" />
     <Compile Include="Main.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
@@ -62,6 +63,6 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>call C:\Users\Stuart\source\repos\HeliView\bin\Debug\Z-[moveToPluginsFolder].bat</PostBuildEvent>
+    <PostBuildEvent>call C:\Users\SSStuart\source\repos\HeliView\bin\Debug\Z-[moveToPluginsFolder].bat</PostBuildEvent>
   </PropertyGroup>
 </Project>

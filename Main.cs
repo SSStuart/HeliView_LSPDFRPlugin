@@ -1,7 +1,6 @@
 ﻿using LSPD_First_Response.Mod.API;
 using Rage;
 using System;
-using System.Net.Configuration;
 using System.Reflection;
 using System.Windows.Forms;
 
@@ -10,6 +9,8 @@ namespace HeliView
     public class Main : Plugin
     {
         public static string pluginName = "HeliView";
+
+        static bool WARP_PLAYER = false;
 
         static bool customCameraActive = false;
         static Camera customCamera = new Camera(false);
@@ -22,7 +23,9 @@ namespace HeliView
         /*static Ped lostSuspectPos = null;
         static bool suspectLost = false;*/
         static Vehicle playerVehicle;
-        static Ped playerCopy;
+        static bool playerInVehicle = false;
+        static bool playerVehicleWasPersistent = false;
+        static Vector3 playerPosition;
 
         //Initialization of the plugin.
         public override void Initialize()
@@ -30,6 +33,9 @@ namespace HeliView
             Functions.OnOnDutyStateChanged += OnOnDutyStateChangedHandler;
  
             Game.LogTrivial(pluginName + " Plugin " + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString() + " has been initialised.");
+            Settings.LoadSettings();
+            WARP_PLAYER = Settings.WarpPlayerInHeli;
+            Game.LogTrivial(pluginName + " Loading settings : Warp player in Heli: " + (WARP_PLAYER ? "Yes" : "No"));
             Game.LogTrivial("Go on duty to fully load " + pluginName + ".");
 
             AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(LSPDFRResolveEventHandler);
@@ -37,7 +43,7 @@ namespace HeliView
 
         public override void Finally()
         {
-            StopHeliPursuitWithPlayer("immediately");
+            StopHeliPursuit("immediately");
             Game.LogTrivial(pluginName + " has been cleaned up.");
         }
         
@@ -61,13 +67,13 @@ namespace HeliView
                             pursuit = Functions.GetActivePursuit();
                             suspect = Functions.GetPursuitPeds(pursuit)[suspectIndex];
                             if (!customCameraActive)
-                                StartHeliPursuitWithPlayer();
+                                StartHeliPursuit();
                             else
                             {
                                 if (Game.IsShiftKeyDownRightNow)
                                     SwitchSuspect();
                                 else
-                                    StopHeliPursuitWithPlayer();
+                                    StopHeliPursuit();
                             }
                         }
                         // DETECT END OF PURSUIT & OTHER EVENTS THAT SHOULD STOP THE CAMERA
@@ -77,7 +83,7 @@ namespace HeliView
                             || Functions.IsPedArrested(suspect)/*
                             || suspect.IsDead*/))
                         {
-                            StopHeliPursuitWithPlayer();
+                            StopHeliPursuit();
                         }
 
                         // UPDATE CAMERA FOV
@@ -99,75 +105,63 @@ namespace HeliView
 
         private static void StartHeliPursuit(string mode = "normal")
         {
-            if (mode == "normal")
-            {
-                customCameraActive = true;
-                Game.LocalPlayer.HasControl = false;
-                if (Game.LocalPlayer.Character.IsInAnyVehicle(false))
-                    Game.LocalPlayer.Character.CurrentVehicle.IsPositionFrozen = true;
-                else
-                    Game.LocalPlayer.Character.IsPositionFrozen = true;
-                Game.FadeScreenOut(500);
-                GameFiber.Wait(500);
-            }
+            Game.LogTrivial(pluginName + " StartHeliPursuit");
+
             heli = new Vehicle("polmav", suspect.GetOffsetPositionUp(100f), suspect.Heading)
             {
                 IsPersistent = true,
-                IsDriveable = false
+                IsDriveable = false,
+                IsCollisionEnabled = false
             };
             heliPilot = new Ped("s_m_m_pilot_02", heli.GetOffsetPositionUp(-2f), 0f);
             heliPilot.WarpIntoVehicle(heli, -1);
             heli.Velocity = new Vector3(0, 0, 10f);
-            heli.Driver.Tasks.ChaseWithHelicopter(suspect, new Vector3(0, -20f, 70f));
-            customCamera.AttachToEntity(heli, new Vector3(0, 1, -2), true);
-            customCamera.PointAtEntity(suspect, new Vector3(), true);
-            customCamera.FOV = Math.Min(4, 1 / heli.DistanceTo(suspect) * 1050);
-            customCamera.Shake("HAND_SHAKE", 1f);
-            customCamera.Active = true;
-            Rage.Native.NativeFunction.Natives.x198F77705FA0931D(suspect);
-            GameFiber.Wait(2000);
-            Game.FadeScreenIn(500);
-
-            Game.DisplayHelp("~b~Ctrl + C~w~ : Exit HeliView\n" +
-                "~b~Ctrl+Shift + C~w~ : Toggle suspect");
-        }
-        private static void StartHeliPursuitWithPlayer(string mode = "normal")
-        {
+            heli.Driver.Tasks.ChaseWithHelicopter(suspect, new Vector3(((float)Math.Sin(Game.GameTime / 1000) * 100f), ((float)Math.Sin(Game.GameTime / 1000) * -10f - 20f), 70f));
+            if (!WARP_PLAYER)
+                Functions.AddCopToPursuit(Functions.GetActivePursuit(), heliPilot);
             if (mode == "normal")
             {
-                customCameraActive = true;
                 Game.LocalPlayer.HasControl = false;
+                playerPosition = Game.LocalPlayer.Character.Position;
                 if (Game.LocalPlayer.Character.CurrentVehicle != null)
                 {
                     playerVehicle = Game.LocalPlayer.Character.CurrentVehicle;
                     playerVehicle.IsPositionFrozen = true;
+                    playerVehicleWasPersistent = playerVehicle.IsPersistent;
                     playerVehicle.IsPersistent = true;
+                    playerInVehicle = true;
+                }
+                else if (Game.LocalPlayer.Character.LastVehicle.Exists())
+                {
+                    playerVehicle = Game.LocalPlayer.Character.LastVehicle;
+                    playerVehicle.IsPositionFrozen = true;
+                    playerVehicleWasPersistent = playerVehicle.IsPersistent;
+                    playerVehicle.IsPersistent = true;
+                    playerInVehicle = false;
+                }
+                else
+                {
+                    Game.LocalPlayer.Character.IsPositionFrozen = true;
+                    playerVehicle = null;
+                    playerInVehicle = false;
                 }
                 Game.FadeScreenOut(500);
                 GameFiber.Wait(500);
-                playerCopy = new Ped(Game.LocalPlayer.Character.Model, Game.LocalPlayer.Character.Position, Game.LocalPlayer.Character.Heading);
-                playerCopy.IsPersistent = true;
-                playerCopy.BlockPermanentEvents = true;
+                customCameraActive = true;
             }
-            heli = new Vehicle("polmav", suspect.GetOffsetPositionUp(100f), suspect.Heading)
+            if ((mode == "normal" || mode == "switch") && WARP_PLAYER)
             {
-                IsPersistent = true,
-                IsDriveable = false
-            };
-            heliPilot = new Ped("s_m_m_pilot_02", heli.GetOffsetPositionUp(-2f), 0f);
-            heliPilot.WarpIntoVehicle(heli, -1);
-            heli.Velocity = new Vector3(0, 0, 10f);
-            heli.Driver.Tasks.ChaseWithHelicopter(suspect, new Vector3(0, -20f, 70f));
+                Game.LocalPlayer.Character.WarpIntoVehicle(heli, 0);
+            }
             customCamera.AttachToEntity(heli, new Vector3(0, 1, -2), true);
             customCamera.PointAtEntity(suspect, new Vector3(), true);
             customCamera.FOV = Math.Min(4, 1 / heli.DistanceTo(suspect) * 1050);
             customCamera.Shake("HAND_SHAKE", 1f);
             customCamera.Active = true;
-            Rage.Native.NativeFunction.Natives.x198F77705FA0931D(suspect);
-            if (mode == "normal" || mode == "switch")
-            {
-                Game.LocalPlayer.Character.WarpIntoVehicle(heli, 0);
-            }
+
+            heli.IsCollisionEnabled = true;
+            if (!WARP_PLAYER)
+                Rage.Native.NativeFunction.Natives.x198F77705FA0931D(suspect);
             GameFiber.Wait(2000);
             Game.FadeScreenIn(500);
 
@@ -183,54 +177,35 @@ namespace HeliView
             Game.DisplaySubtitle("Switching to suspect " + (suspectIndex + 1) + "/" + (nbSuspects));
             if (suspectIndex != oldSuspectIndex && !Functions.GetPursuitPeds(pursuit)[suspectIndex].IsDead)
             {
-                StopHeliPursuitWithPlayer("switch");
-                StartHeliPursuitWithPlayer("switch");
+                StopHeliPursuit("switch");
+                StartHeliPursuit("switch");
             }
         }
 
         private static void StopHeliPursuit(string mode = "normal")
         {
+            Game.LogTrivial(pluginName + " StopHeliPursuit");
+
             if (mode == "normal" || mode == "switch")
             {
                 Game.FadeScreenOut(500);
                 GameFiber.Wait(500);
             }
-            customCamera.Active = false;
-            customCamera.Detach();
-            if (heli.Exists())
+            if (mode != "switch")
             {
-                if (heli.HasDriver)
+                if (playerVehicle != null && playerVehicle.Exists())
                 {
-                    Functions.RemovePedFromPursuit(heli.Driver);
-                    heli.Driver.Delete();
-                }
-                heli.Delete();
-            }
-            if (mode == "normal" || mode == "immediately")
-            {
-                Rage.Native.NativeFunction.Natives.x198F77705FA0931D(Game.LocalPlayer.Character);
-                if (mode == "normal")
-                {
-                    GameFiber.Wait(500);
-                    Game.FadeScreenIn(500);
-                }
-                Functions.RemovePedFromPursuit(Game.LocalPlayer.Character);
-                if (Game.LocalPlayer.Character.Tasks.CurrentTaskStatus != TaskStatus.NoTask)
-                    Game.LocalPlayer.Character.Tasks.Clear();
-                Game.LocalPlayer.HasControl = true;
-                if (playerVehicle.Exists())
                     playerVehicle.IsPositionFrozen = false;
-                Game.LocalPlayer.Character.IsPositionFrozen = false;
-                customCameraActive = false;
+                    playerVehicle.IsPersistent = playerVehicleWasPersistent;
+                    if (WARP_PLAYER && playerInVehicle)
+                        Game.LocalPlayer.Character.WarpIntoVehicle(playerVehicle, -1);
+                    else if (WARP_PLAYER && !playerInVehicle)
+                        Game.LocalPlayer.Character.Position = playerPosition;
+                }
+                else
+                    Game.LocalPlayer.Character.Position = playerPosition;
             }
-        }
-        private static void StopHeliPursuitWithPlayer(string mode = "normal")
-        {
-            if (mode == "normal" || mode == "switch")
-            {
-                Game.FadeScreenOut(500);
-                GameFiber.Wait(500);
-            }
+            Game.LocalPlayer.Character.IsPositionFrozen = false;
             customCamera.Active = false;
             customCamera.Detach();
             if (heli.Exists())
@@ -239,27 +214,19 @@ namespace HeliView
                 {
                     Functions.RemovePedFromPursuit(heli.Driver);
                     heli.Driver.Delete();
-                    Game.LocalPlayer.Character.Position = playerCopy.Position;
                 }
                 heli.Delete();
             }
             if (mode == "normal" || mode == "immediately")
             {
-                Rage.Native.NativeFunction.Natives.x198F77705FA0931D(Game.LocalPlayer.Character);
-                playerCopy.Delete();
+                if (!WARP_PLAYER) { }
+                    Rage.Native.NativeFunction.Natives.x198F77705FA0931D(Game.LocalPlayer.Character);
                 if (mode == "normal")
                 {
                     GameFiber.Wait(500);
                     Game.FadeScreenIn(500);
                 }
-                Functions.RemovePedFromPursuit(Game.LocalPlayer.Character);
-                if (Game.LocalPlayer.Character.Tasks.CurrentTaskStatus != TaskStatus.NoTask)
-                    Game.LocalPlayer.Character.Tasks.Clear();
                 Game.LocalPlayer.HasControl = true;
-                if (Game.LocalPlayer.Character.IsInAnyVehicle(false))
-                    Game.LocalPlayer.Character.CurrentVehicle.IsPositionFrozen = false;
-                else
-                    Game.LocalPlayer.Character.IsPositionFrozen = false;
                 customCameraActive = false;
             }
         }
