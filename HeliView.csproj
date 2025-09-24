@@ -38,10 +38,6 @@
     <Reference Include="LucasRitter.Scaleforms.RPH1">
       <HintPath>References\LucasRitter.Scaleforms.RPH1.dll</HintPath>
     </Reference>
-    <Reference Include="RAGENativeUI, Version=1.9.2.0, Culture=neutral, processorArchitecture=AMD64">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>bin\Debug\RAGENativeUI.dll</HintPath>
-    </Reference>
     <Reference Include="RagePluginHook, Version=0.0.0.0, Culture=neutral, processorArchitecture=AMD64">
       <HintPath>packages\RagePluginHook.1.98.0\lib\net472\RagePluginHook.dll</HintPath>
     </Reference>
@@ -63,6 +59,15 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="README.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="screenshots\copCar.jpg" />
+    <Content Include="screenshots\copEnd.jpg" />
+    <Content Include="screenshots\copFrame.jpg" />
+    <Content Include="screenshots\news1.jpg" />
+    <Content Include="screenshots\newsArrest.jpg" />
+    <Content Include="screenshots\newsPRBackup.jpg" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

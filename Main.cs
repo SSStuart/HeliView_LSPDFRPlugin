@@ -78,6 +78,8 @@ namespace HeliView
                         if (Game.IsKeyDown(Keys.R) && Game.IsControlKeyDownRightNow && Functions.GetActivePursuit() != null)
                         {
                             pursuit = Functions.GetActivePursuit();
+                            int nbSuspects = Functions.GetPursuitPeds(pursuit).Length;
+                            suspectIndex = Math.Min(suspectIndex, nbSuspects - 1);
                             suspect = Functions.GetPursuitPeds(pursuit)[suspectIndex];
                             // If the camera is not active, start the heli camera
                             if (!customCameraActive)
@@ -254,7 +256,7 @@ namespace HeliView
                 // If the player had an active vehicle
                 if (playerVehicle != null && playerVehicle.Exists())
                 {
-                    // Restore player vehicle attributes, and wrap player back in it (if the player was in the vehicle), or just reposition the player on foot
+                    // Restore player vehicle attributes, and warp player back in it (if the player was in the vehicle), or just reposition the player on foot
                     playerVehicle.IsPositionFrozen = false;
                     playerVehicle.IsPersistent = playerVehicleWasPersistent;
                     if (WARP_PLAYER && playerInVehicle)
