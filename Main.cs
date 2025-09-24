@@ -46,7 +46,6 @@ namespace HeliView
             ENABLE_OVERLAY = Settings.EnableOverlay;
             WARP_PLAYER = Settings.WarpPlayerInHeli;
             HELI_TYPE = Settings.HeliType;
-            Game.LogTrivial("["+pluginName + "] Loading settings : ");
             Game.LogTrivial("[" + pluginName + "] Enable Overlay: " + (ENABLE_OVERLAY? "Yes" : "No"));
             Game.LogTrivial("[" + pluginName + "] Warp player in Heli: " + (WARP_PLAYER ? "Yes" : "No"));
             Game.LogTrivial("[" + pluginName + "] Heli type: " + HELI_TYPE);

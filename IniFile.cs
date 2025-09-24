@@ -15,7 +15,7 @@ namespace HeliView
 
         internal static void LoadSettings()
         {
-            Game.LogTrivial("[LOG]: Loading config file for SSStuart Tools.");
+            Game.LogTrivial("[LOG]: Loading config file for HeliView.");
 
             ini.Create();
             EnableOverlay = ini.ReadBoolean("Settings", "EnableOverlay", true);
