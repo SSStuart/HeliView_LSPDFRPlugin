@@ -35,6 +35,9 @@
     <Reference Include="LSPD First Response">
       <HintPath>References\LSPD First Response.dll</HintPath>
     </Reference>
+    <Reference Include="LucasRitter.Scaleforms.RPH1">
+      <HintPath>References\LucasRitter.Scaleforms.RPH1.dll</HintPath>
+    </Reference>
     <Reference Include="RAGENativeUI, Version=1.9.2.0, Culture=neutral, processorArchitecture=AMD64">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>bin\Debug\RAGENativeUI.dll</HintPath>
