@@ -106,33 +106,36 @@ namespace HeliView
                         // UPDATE CAMERA FOV and OVERLAY
                         if (customCameraActive)
                         {
-                            if (currentHeliType == "news")
+                            if (ENABLE_OVERLAY)
                             {
-                                // If News heli, display the news overlay
-                                string newsText = "Pursuit in progress";
-                                if (suspect.IsInAnyVehicle(false))
+                                if (currentHeliType == "news")
                                 {
-                                    // If the suspect is in a vehicle, try to get the vehicle name and display it (only considering model name with letters)
-                                    string vehName = suspect.CurrentVehicle.Model.Name;
-                                    if (Regex.IsMatch(vehName, @"^[a-z]+$", RegexOptions.IgnoreCase))
-                                        newsText += ". Suspect driving a " + vehName[0].ToString().ToUpper() + vehName.Substring(1).ToLower();
+                                    // If News heli, display the news overlay
+                                    string newsText = "Pursuit in progress";
+                                    if (suspect.IsInAnyVehicle(false))
+                                    {
+                                        // If the suspect is in a vehicle, try to get the vehicle name and display it (only considering model name with letters)
+                                        string vehName = suspect.CurrentVehicle.Model.Name;
+                                        if (Regex.IsMatch(vehName, @"^[a-z]+$", RegexOptions.IgnoreCase))
+                                            newsText += ". Suspect driving a " + vehName[0].ToString().ToUpper() + vehName.Substring(1).ToLower();
+                                    }
+                                    // Update the overlay texts with the current area name every 10 seconds
+                                    if (lastNewsUpdate < Game.GameTime - 1000 * 10)
+                                    {
+                                        newsScaleform.CallFunction("SET_TEXT", newsText, Functions.GetZoneAtPosition(suspect.Position).RealAreaName);
+                                        lastNewsUpdate = Game.GameTime;
+                                    }
+                                    newsScaleform.Draw();
                                 }
-                                // Update the overlay texts with the current area name every 10 seconds
-                                if (lastNewsUpdate < Game.GameTime - 1000 * 10)
+                                else if (currentHeliType == "cop")
                                 {
-                                    newsScaleform.CallFunction("SET_TEXT", newsText, Functions.GetZoneAtPosition(suspect.Position).RealAreaName);
-                                    lastNewsUpdate = Game.GameTime;
+                                    // If Cop heli, display the Heli overlay
+                                    // Update the overlay camera parameters and draw it
+                                    heliCamScaleform.Heading = customCamera.Rotation.Yaw;
+                                    heliCamScaleform.Altitude = heli.Position.Z;
+                                    //heliCamScaleform.FieldOfView = customCamera.FOV;      // Not sure what value to use here
+                                    heliCamScaleform.Draw();
                                 }
-                                newsScaleform.Draw();
-                            }
-                            else if (currentHeliType == "cop")
-                            {
-                                // If Cop heli, display the Heli overlay
-                                // Update the overlay camera parameters and draw it
-                                heliCamScaleform.Heading = customCamera.Rotation.Yaw;
-                                heliCamScaleform.Altitude = heli.Position.Z;
-                                //heliCamScaleform.FieldOfView = customCamera.FOV;      // Not sure what value to use here
-                                heliCamScaleform.Draw();
                             }
                             // Zoom in / out depending on the suspect visibility
                             if (suspect.IsRendered)
@@ -196,10 +199,11 @@ namespace HeliView
                     playerVehicle = null;
                     playerInVehicle = false;
                 }
-                // Fade screen out and Hide radar
+                // Fade screen out and Hide radar (if overlay enabled)
                 Game.FadeScreenOut(500);
                 GameFiber.Wait(500);
-                Rage.Native.NativeFunction.Natives.xA0EBB943C300E693(false);
+                if (ENABLE_OVERLAY)
+                    Rage.Native.NativeFunction.Natives.xA0EBB943C300E693(false);
                 customCameraActive = true;
             }
             // Warp player in heli (if setting enabled)
@@ -249,7 +253,8 @@ namespace HeliView
                 // Fade screen out, and show radar again
                 Game.FadeScreenOut(500);
                 GameFiber.Wait(500);
-                Rage.Native.NativeFunction.Natives.xA0EBB943C300E693(true);
+                if (ENABLE_OVERLAY)
+                    Rage.Native.NativeFunction.Natives.xA0EBB943C300E693(true);
             }
             if (!switching)
             {
