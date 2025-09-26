@@ -1,6 +1,7 @@
 # HeliView - *LSPDFR Plugin*
 
-An LSPDFR plugin to switch to aerial view during a chase. Either with a police helicopter or a news channel helicopter.
+An LSPDFR plugin to switch to aerial view during a chase. Either with a police helicopter or a news channel helicopter.  
+Included in [Yasd's NewsHeli plugin (lcpdfr.com)](https://www.lcpdfr.com/downloads/gta5mods/scripts/51090-newsheli/).
 
 ## How it works
 During a pursuit, press `CTRL` + `R` to switch to helicopter view. Press again to exit, or use `CTRL` + `SHIFT` + `R` to switch to another suspect. 

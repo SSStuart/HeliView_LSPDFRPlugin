@@ -2,6 +2,7 @@
 using LucasRitter.Scaleforms;
 using LucasRitter.Scaleforms.Generic;
 using Rage;
+using Rage.Native;
 using System;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -23,7 +24,7 @@ namespace HeliView
         static Ped heliPilot = null;
         static LHandle pursuit;
         static Ped suspect;
-        static int suspectIndex = 0;
+        static int suspectIndex = -1;
         static float FOVsuspectLostOffset = 0;
         /*static Ped lostSuspectPos = null;
         static bool suspectLost = false;*/
@@ -111,13 +112,13 @@ namespace HeliView
                                 if (currentHeliType == "news")
                                 {
                                     // If News heli, display the news overlay
-                                    string newsText = "Pursuit in progress";
+                                    string newsText = Functions.IsPursuitStillRunning(pursuit) ? "Pursuit in progress" : "Suspect under arrest";
                                     if (suspect.IsInAnyVehicle(false))
                                     {
                                         // If the suspect is in a vehicle, try to get the vehicle name and display it (only considering model name with letters)
                                         string vehName = suspect.CurrentVehicle.Model.Name;
-                                        if (Regex.IsMatch(vehName, @"^[a-z]+$", RegexOptions.IgnoreCase))
-                                            newsText += ". Suspect driving a " + vehName[0].ToString().ToUpper() + vehName.Substring(1).ToLower();
+                                        if (Regex.IsMatch(vehName, @"^[a-z]+$", RegexOptions.IgnoreCase) && !Functions.IsPedArrested(suspect))
+                                            newsText += ". Suspect " + (suspect.SeatIndex == -1 ? "driving" : "in") + " a " + vehName[0].ToString().ToUpper() + vehName.Substring(1).ToLower();
                                     }
                                     // Update the overlay texts with the current area name every 10 seconds
                                     if (lastNewsUpdate < Game.GameTime - 1000 * 10)
@@ -152,6 +153,14 @@ namespace HeliView
 
         private static void StartHeliPursuit(bool switching = false)
         {
+            // Selecting suspect
+            suspect = GetNextSuspect();
+            if (suspect == null)
+            {
+                Game.LogTrivial("[" + pluginName + "] No suspect found in pursuit");
+                return;
+            }
+            
             // Select heli type (cop / news) according to settings
             currentHeliType = HELI_TYPE == "cop" ? "cop" : (HELI_TYPE == "news" ? "news" : (new Random().Next(0,2) == 1 ? "cop" : "news"));
             Game.LogTrivial("[" + pluginName + "] StartHeliPursuit with Heli type '"+currentHeliType+"'");
@@ -203,7 +212,7 @@ namespace HeliView
                 Game.FadeScreenOut(500);
                 GameFiber.Wait(500);
                 if (ENABLE_OVERLAY)
-                    Rage.Native.NativeFunction.Natives.xA0EBB943C300E693(false);
+                    NativeFunction.Natives.DISPLAY_RADAR(false);
                 customCameraActive = true;
             }
             // Warp player in heli (if setting enabled)
@@ -219,7 +228,7 @@ namespace HeliView
             heli.IsCollisionEnabled = true; // Re-enable heli collision
             // If player not warped in heli, make the map load arround the suspect
             if (!WARP_PLAYER)
-                Rage.Native.NativeFunction.Natives.x198F77705FA0931D(suspect);
+                NativeFunction.Natives.SET_FOCUS_ENTITY(suspect);
 
             // Fade screen in and display controls help
             GameFiber.Wait(2000);
@@ -231,14 +240,28 @@ namespace HeliView
 
         private static void SwitchSuspect()
         {
+            Game.LogTrivial("[" + pluginName + "] SwitchSuspect");
             // Select next suspect in pursuit
-            int oldSuspectIndex = suspectIndex;
-            int nbSuspects = Functions.GetPursuitPeds(pursuit).Length;
-            suspectIndex = (suspectIndex + 1) % nbSuspects;
-            Game.DisplaySubtitle("Switching to suspect " + (suspectIndex + 1) + "/" + (nbSuspects));
-            if (suspectIndex != oldSuspectIndex && !Functions.GetPursuitPeds(pursuit)[suspectIndex].IsDead)
+            Ped nextSuspect = GetNextSuspect();
+            if (nextSuspect == null)
+            {
+                Game.LogTrivial("[" + pluginName + "] No other suspect found in pursuit, aborting switch");
+                return;
+            }
+
+            suspect = nextSuspect;
+            if (heli.DistanceTo2D(suspect) < 200)
+            {
+                // Switch target
+                Game.LogTrivial("[" + pluginName + "] Switching to suspect already close to heli");
+                heli.Driver.Tasks.ChaseWithHelicopter(suspect, new Vector3(((float)Math.Sin(Game.GameTime / 1000) * 100f), ((float)Math.Sin(Game.GameTime / 1000) * -10f - 20f), 70f));
+                customCamera.PointAtEntity(suspect, new Vector3(), true);
+                customCamera.FOV = Math.Min(4, 1 / heli.DistanceTo(suspect) * 1050);
+            }
+            else
             {
                 // Restart the heli pursuit on the new suspect
+                Game.LogTrivial("[" + pluginName + "] Switching to suspect far from heli, restarting heli pursuit");
                 StopHeliPursuit(true);
                 StartHeliPursuit(true);
             }
@@ -254,7 +277,7 @@ namespace HeliView
                 Game.FadeScreenOut(500);
                 GameFiber.Wait(500);
                 if (ENABLE_OVERLAY)
-                    Rage.Native.NativeFunction.Natives.xA0EBB943C300E693(true);
+                    NativeFunction.Natives.DISPLAY_RADAR(true);
             }
             if (!switching)
             {
@@ -293,7 +316,7 @@ namespace HeliView
             {
                 // If the player was not warped in the heli, make the map load arround the player again
                 if (!WARP_PLAYER)
-                    Rage.Native.NativeFunction.Natives.x198F77705FA0931D(Game.LocalPlayer.Character);
+                    NativeFunction.Natives.SET_FOCUS_ENTITY(Game.LocalPlayer.Character);
                 if (!immediately)
                 {
                     // Fade screen in
@@ -304,6 +327,42 @@ namespace HeliView
                 Game.LocalPlayer.HasControl = true;
                 customCameraActive = false;
             }
+        }
+
+        private static Ped GetNextSuspect()
+        {
+            // Get the current active pursuit
+            LHandle pursuitHandle = Functions.GetActivePursuit();
+            if (pursuitHandle == null || !Functions.IsPursuitStillRunning(pursuitHandle))
+            {
+                Game.LogTrivial("[" + pluginName + "] No active pursuit");
+                return null;
+            }
+
+            // Get the list of suspects in the pursuit
+            var suspects = Functions.GetPursuitPeds(pursuitHandle);
+            if (suspects == null || suspects.Length == 0)
+            {
+                Game.LogTrivial("[" + pluginName + "] No suspect in pursuit");
+                return null;
+            }
+
+            // Cycle through the suspects to get the next one
+            int nbSuspects = suspects.Length;
+            int oldSuspectIndex = suspectIndex;
+            suspectIndex = (suspectIndex + 1) % nbSuspects;
+            suspect = suspects[suspectIndex];
+            if (suspect == null || !suspect.Exists() || (suspectIndex == oldSuspectIndex && customCameraActive))
+            {
+                if (suspectIndex == oldSuspectIndex)
+                    Game.LogTrivial("[" + pluginName + "] Same suspect, no change");
+                else
+                    Game.LogTrivial("[" + pluginName + "] Suspect " + (suspectIndex + 1) + "/" + nbSuspects + " does not exist anymore");
+                return null;
+            }
+
+            Game.LogTrivial("[" + pluginName + "] Switching to suspect " + (suspectIndex + 1) + "/" + nbSuspects);
+            return suspect;
         }
 
         public static Assembly LSPDFRResolveEventHandler(object sender, ResolveEventArgs args)
