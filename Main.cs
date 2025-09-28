@@ -23,7 +23,6 @@ namespace HeliView
         static Camera customCamera = new Camera(false);
         static Vehicle heli = null;
         static Ped heliPilot = null;
-        static LHandle pursuit;
         static Ped suspect;
         static int suspectIndex = -1;
         static float FOVsuspectLostOffset = 0;
@@ -78,24 +77,17 @@ namespace HeliView
                         GameFiber.Yield();
 
                         // TOOGLE THE CAMERA
-                        if (Game.IsKeyDown(Keys.R) && Game.IsControlKeyDownRightNow && Functions.GetActivePursuit() != null)
+                        if (Game.IsKeyDown(Keys.R) && Game.IsControlKeyDownRightNow && !Game.IsShiftKeyDownRightNow)
                         {
-                            pursuit = Functions.GetActivePursuit();
-                            int nbSuspects = Functions.GetPursuitPeds(pursuit).Length;
-                            suspectIndex = Math.Min(suspectIndex, nbSuspects - 1);
-                            suspect = Functions.GetPursuitPeds(pursuit)[suspectIndex];
                             // If the camera is not active, start the heli camera
-                            if (!customCameraActive)
+                            if (!customCameraActive && Functions.GetActivePursuit() != null)
                                 StartHeliPursuit();
-                            else
-                            {
-                                // If the camera is already active : If the shift key is also pressed, switch to the next suspect in the pursuit, else stop the heli camera
-                                if (Game.IsShiftKeyDownRightNow)
-                                    SwitchSuspect();
-                                else
-                                    StopHeliPursuit();
-                            }
-                        }
+                            else if (customCameraActive)
+                                StopHeliPursuit();
+                        } else if (Game.IsKeyDown(Keys.R) && Game.IsControlKeyDownRightNow && Game.IsShiftKeyDownRightNow && customCameraActive)
+                            SwitchSuspect();
+
+                        
                         // DETECT END OF PURSUIT & OTHER EVENTS THAT SHOULD STOP THE CAMERA
                         if (customCameraActive && 
                             (!Functions.IsPursuitStillRunning(pursuit)      // Stop if pursuit ended
@@ -114,16 +106,16 @@ namespace HeliView
                                 if (currentHeliType == "news")
                                 {
                                     // If News heli, display the news overlay
-                                    string newsText = Functions.IsPursuitStillRunning(pursuit) ? "Pursuit in progress" : "Suspect under arrest";
+                                    string newsText = Functions.GetActivePursuit() != null ? "Pursuit in progress" : "Suspect under arrest";
                                     if (suspect.IsInAnyVehicle(false))
                                     {
                                         // If the suspect is in a vehicle, try to get the vehicle name and display it (only considering model name with letters)
                                         string vehName = suspect.CurrentVehicle.Model.Name;
                                         if (Regex.IsMatch(vehName, @"^[a-z]+$", RegexOptions.IgnoreCase) && !Functions.IsPedArrested(suspect))
-                                            newsText += $". Suspect {(suspect.SeatIndex == -1 ? "driving" : "in")} a {vehName[0].ToString().ToUpper()} {vehName.Substring(1).ToLower()}";
+                                            newsText += $". Suspect {(suspect.SeatIndex == -1 ? "driving" : "in")} a {vehName[0].ToString().ToUpper()}{vehName.Substring(1).ToLower()}";
                                     }
                                     // Update the overlay texts with the current area name every 10 seconds
-                                    if (lastNewsUpdate < Game.GameTime - 1000 * 10)
+                                    if (lastNewsUpdate < Game.GameTime - 1000 * 10 && suspect != null && suspect.Exists())
                                     {
                                         newsScaleform.CallFunction("SET_TEXT", newsText, Functions.GetZoneAtPosition(suspect.Position).RealAreaName);
                                         lastNewsUpdate = Game.GameTime;
@@ -236,7 +228,7 @@ namespace HeliView
             GameFiber.Wait(2000);
             Game.FadeScreenIn(500);
 
-            Game.DisplayHelp("~INPUT_VEH_HORN~ ~b~Ctrl + R~w~ : Exit HeliView\n" +
+            Game.DisplayHelp("~b~Ctrl + R~w~ : Exit HeliView\n" +
                 "~b~Ctrl+Shift + R~w~ : Toggle suspect");
         }
 
@@ -278,9 +270,9 @@ namespace HeliView
                 // Fade screen out, and show radar again
                 Game.FadeScreenOut(500);
                 GameFiber.Wait(500);
+            }
                 if (ENABLE_OVERLAY)
                     NativeFunction.Natives.DISPLAY_RADAR(true);
-            }
             if (!switching)
             {
                 // If the player had an active vehicle
@@ -294,8 +286,8 @@ namespace HeliView
                     else if (WARP_PLAYER && !playerInVehicle)
                         Game.LocalPlayer.Character.Position = playerPosition;
                 }
-                // If the player had no vehicle, just reposition the player on foot
-                else
+                // If the player had no vehicle, just reposition the player on foot (if the player position is defined)
+                else if (playerPosition != null && playerPosition != Vector3.Zero)
                     Game.LocalPlayer.Character.Position = playerPosition;
             }
             // Restore player control and attributes
