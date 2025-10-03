@@ -35,9 +35,6 @@
     <Reference Include="LSPD First Response">
       <HintPath>References\LSPD First Response.dll</HintPath>
     </Reference>
-    <Reference Include="LucasRitter.Scaleforms.RPH1">
-      <HintPath>References\LucasRitter.Scaleforms.RPH1.dll</HintPath>
-    </Reference>
     <Reference Include="RagePluginHook, Version=0.0.0.0, Culture=neutral, processorArchitecture=AMD64">
       <HintPath>packages\RagePluginHook.1.98.0\lib\net472\RagePluginHook.dll</HintPath>
     </Reference>
@@ -56,6 +53,7 @@
     <Compile Include="IniFile.cs" />
     <Compile Include="Main.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Scaleform.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

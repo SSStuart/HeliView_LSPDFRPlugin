@@ -1,6 +1,4 @@
 ﻿using LSPD_First_Response.Mod.API;
-using LucasRitter.Scaleforms;
-using LucasRitter.Scaleforms.Generic;
 using Rage;
 using Rage.Native;
 using System;
@@ -34,7 +32,7 @@ namespace HeliView
         static bool playerVehicleWasPersistent = false;
         static string currentHeliType = "";
         static Vector3 playerPosition;
-        static Scaleform newsScaleform = new Scaleform("breaking_news");
+        static BreakingNews newsScaleform = new BreakingNews();
         static HeliCam heliCamScaleform = new HeliCam();
         static uint lastNewsUpdate = 0;
 
@@ -136,7 +134,8 @@ namespace HeliView
                                     // Update the overlay texts with the current area name every 10 seconds
                                     if (lastNewsUpdate < Game.GameTime - 1000 * 10 && suspect != null && suspect.Exists())
                                     {
-                                        newsScaleform.CallFunction("SET_TEXT", newsText, Functions.GetZoneAtPosition(suspect.Position).RealAreaName);
+                                        newsScaleform.Title = newsText;
+                                        newsScaleform.Subtitle = Functions.GetZoneAtPosition(suspect.Position).RealAreaName;
                                         lastNewsUpdate = Game.GameTime;
                                     }
                                     newsScaleform.Draw();
