@@ -1,6 +1,4 @@
 ﻿using LSPD_First_Response.Mod.API;
-using LucasRitter.Scaleforms;
-using LucasRitter.Scaleforms.Generic;
 using Rage;
 using Rage.Native;
 using System;
@@ -18,6 +16,7 @@ namespace HeliView
         static bool ENABLE_OVERLAY = true;
         static bool WARP_PLAYER = true;
         static string HELI_TYPE = "cop";
+        static string ON_PED_ARREST_BEHAVIOR = "1";
 
         static bool customCameraActive = false;
         static Camera customCamera = new Camera(false);
@@ -33,7 +32,7 @@ namespace HeliView
         static bool playerVehicleWasPersistent = false;
         static string currentHeliType = "";
         static Vector3 playerPosition;
-        static Scaleform newsScaleform = new Scaleform("breaking_news");
+        static BreakingNews newsScaleform = new BreakingNews();
         static HeliCam heliCamScaleform = new HeliCam();
         static uint lastNewsUpdate = 0;
 
@@ -47,10 +46,7 @@ namespace HeliView
             ENABLE_OVERLAY = Settings.EnableOverlay;
             WARP_PLAYER = Settings.WarpPlayerInHeli;
             HELI_TYPE = Settings.HeliType;
-            Game.LogTrivial("[" + pluginName + "] Enable Overlay: " + (ENABLE_OVERLAY? "Yes" : "No"));
-            Game.LogTrivial($"[{pluginName}] Enable Overlay: {(ENABLE_OVERLAY ? "Yes" : "No")}");
-            Game.LogTrivial($"[{pluginName}] Warp player in Heli: {(WARP_PLAYER ? "Yes" : "No")}");
-            Game.LogTrivial($"[{pluginName}] Heli type: {HELI_TYPE}");
+            ON_PED_ARREST_BEHAVIOR = Settings.onPedArrestBehavior;
             Game.LogTrivial($"Go on duty to fully load {pluginName}.");
 
             AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(LSPDFRResolveEventHandler);
@@ -68,9 +64,9 @@ namespace HeliView
             {
                 Game.DisplayNotification("mpinventory", "mp_specitem_heli", pluginName, $"V {pluginVersion}", "~g~Loaded successfully !");
 
-                GameFiber.StartNew(ProcessMenus);
+                GameFiber.StartNew(MainLoop);
 
-                void ProcessMenus()
+                void MainLoop()
                 {
                     while (true)
                     {
@@ -87,15 +83,36 @@ namespace HeliView
                         } else if (Game.IsKeyDown(Keys.R) && Game.IsControlKeyDownRightNow && Game.IsShiftKeyDownRightNow && customCameraActive)
                             SwitchSuspect();
 
-                        
                         // DETECT END OF PURSUIT & OTHER EVENTS THAT SHOULD STOP THE CAMERA
-                        if (customCameraActive && 
-                            (!Functions.IsPursuitStillRunning(pursuit)      // Stop if pursuit ended
-                            || (heli.Exists() && heli.EngineHealth < 200)   // or Stop if heli is too damaged
-                            || Functions.IsPedArrested(suspect)/*           // or Stop if suspect arrested
-                            || suspect.IsDead*/))
+                        if (customCameraActive)
                         {
+                            // Always stop if 
+                            bool shouldAlwaysStop = heli.Exists() && heli.EngineHealth < 200;   // The heli is too damaged
+                            bool shouldStopAuto = (ON_PED_ARREST_BEHAVIOR == "1" && (       // Stop if the camera should stop when current suspect is arrested
+                                    Functions.GetActivePursuit() == null     // and the pursuit ended
+                                    || (suspect != null && Functions.IsPedArrested(suspect))   // or the suspect is arrested
+                                )) || (ON_PED_ARREST_BEHAVIOR == "2+1" && (         // Stop if the camera should stop when there is no more suspect
+                                    Functions.GetActivePursuit() == null     // and the pursuit ended
+                                ));
+                            // Stop if the camera should not stop automatically unless the suspect does not exist anymore
+                            bool shouldStopNoAuto = ON_PED_ARREST_BEHAVIOR != "1" && (
+                                    (suspect == null || !suspect.Exists())      // and the suspect does not exist anymore
+                                );
+                            // Should switch suspect if the current suspect is arrested or does not exist anymore, but there is still another suspect in the pursuit
+                            bool shouldSwitch = ON_PED_ARREST_BEHAVIOR.StartsWith("2+") && (
+                                    Functions.GetActivePursuit() != null && Functions.GetPursuitPeds(Functions.GetActivePursuit()).Length > 0 && (suspect == null || Functions.IsPedArrested(suspect)) // there is another suspect in the pursuit and the current suspect is arrested or does not exist anymore
+                                );
+                        
+                            if (shouldAlwaysStop || shouldStopAuto || (shouldStopNoAuto && !shouldSwitch))
+                        {
+                                Game.LogTrivial($"[{pluginName}] Stopping HeliView because {(shouldAlwaysStop ? "the heli is too damaged" : (shouldStopAuto ? "the pursuit ended or the suspect is arrested" : "the suspect does not exist anymore"))}");
                             StopHeliPursuit();
+                        }
+                            else if (shouldSwitch)
+                            {
+                                Game.LogTrivial($"[{pluginName}] Current suspect {(suspect == null || !suspect.Exists() ? "doesn't exist anymore" : " was arrested")}, Switching to remaining pursuit suspect");
+                                SwitchSuspect();
+                            }
                         }
 
                         // UPDATE CAMERA FOV and OVERLAY
@@ -117,7 +134,8 @@ namespace HeliView
                                     // Update the overlay texts with the current area name every 10 seconds
                                     if (lastNewsUpdate < Game.GameTime - 1000 * 10 && suspect != null && suspect.Exists())
                                     {
-                                        newsScaleform.CallFunction("SET_TEXT", newsText, Functions.GetZoneAtPosition(suspect.Position).RealAreaName);
+                                        newsScaleform.Title = newsText;
+                                        newsScaleform.Subtitle = Functions.GetZoneAtPosition(suspect.Position).RealAreaName;
                                         lastNewsUpdate = Game.GameTime;
                                     }
                                     newsScaleform.Draw();
@@ -148,6 +166,7 @@ namespace HeliView
         private static void StartHeliPursuit(bool switching = false)
         {
             // Selecting suspect
+            if (!switching)
             suspect = GetNextSuspect();
             if (suspect == null)
             {
@@ -346,7 +365,7 @@ namespace HeliView
             int oldSuspectIndex = suspectIndex;
             suspectIndex = (suspectIndex + 1) % nbSuspects;
             suspect = suspects[suspectIndex];
-            if (suspect == null || !suspect.Exists() || (suspectIndex == oldSuspectIndex && customCameraActive))
+            if (suspect == null || !suspect.Exists())
             {
                 if (suspectIndex == oldSuspectIndex)
                     Game.LogTrivial($"[{pluginName}] Same suspect, no change");

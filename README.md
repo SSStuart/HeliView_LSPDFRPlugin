@@ -27,5 +27,4 @@ You can adjust some settings in the `.ini` file :
 
 ## `ℹ` Prerequisites
 - [RAGE Plugin Hook](https://ragepluginhook.net/Downloads.aspx)
-- [LSPDFR](www.lcpdfr.com/lspdfr/)
-- [LucasRitter.Scaleforms](https://github.com/LucasRitter/gtav-scaleforms/releases/tag/0.1.0)
+- [LSPDFR](https://www.lcpdfr.com/lspdfr/)
