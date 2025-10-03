@@ -26,9 +26,9 @@ namespace HeliView
 
     internal class HeliCam : Scaleform
     {
-        public float heading;
-        public float altitude;
-        public float field_of_view;
+        private float heading;
+        private float altitude;
+        private float field_of_view;
 
         public HeliCam() : base(ScaleformType.heli_cam)
         {
@@ -66,9 +66,10 @@ namespace HeliView
             get { return field_of_view; }
             set
             {
-                field_of_view = value;
+                float convertedValue = MathHelper.Clamp(1 - (value - 4) / 90.0f, 4, 90);
+                field_of_view = convertedValue;
                 NativeFunction.Natives.BEGIN_SCALEFORM_MOVIE_METHOD(_handle, "SET_CAM_FOV");
-                NativeFunction.Natives.SCALEFORM_MOVIE_METHOD_ADD_PARAM_FLOAT(value);
+                NativeFunction.Natives.SCALEFORM_MOVIE_METHOD_ADD_PARAM_FLOAT(convertedValue);
                 NativeFunction.Natives.END_SCALEFORM_MOVIE_METHOD();
             }
         }

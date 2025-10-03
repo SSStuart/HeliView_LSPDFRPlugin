@@ -49,6 +49,8 @@ namespace HeliView
             ON_PED_ARREST_BEHAVIOR = Settings.onPedArrestBehavior;
             Game.LogTrivial($"Go on duty to fully load {pluginName}.");
 
+            UpdateChecker.CheckForUpdates();
+
             AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(LSPDFRResolveEventHandler);
         }
 
@@ -146,7 +148,7 @@ namespace HeliView
                                     // Update the overlay camera parameters and draw it
                                     heliCamScaleform.Heading = customCamera.Rotation.Yaw;
                                     heliCamScaleform.Altitude = heli.Position.Z;
-                                    //heliCamScaleform.FieldOfView = customCamera.FOV;      // Not sure what value to use here
+                                    heliCamScaleform.FieldOfView = customCamera.FOV;
                                     heliCamScaleform.Draw();
                                 }
                             }
@@ -156,7 +158,7 @@ namespace HeliView
                             else
                                 FOVsuspectLostOffset = Math.Min(100, FOVsuspectLostOffset + 0.1f);
                             // Update the camera zoom (FOV) depending on the distance to the suspect with some oscillation, and suspect visibility
-                            customCamera.FOV = Math.Max(4, (1 / heli.DistanceTo(suspect) * 2000) + (float)(Math.Sin(Game.GameTime / 10000.0) * 5 - 5) + FOVsuspectLostOffset);
+                            customCamera.FOV = MathHelper.Clamp((1 / heli.DistanceTo(suspect) * 2000) + (float)(Math.Sin(Game.GameTime / 10000.0) * 5 - 5) + FOVsuspectLostOffset, 4, 90);
                         }
                     }
                 }
@@ -179,7 +181,7 @@ namespace HeliView
             Game.LogTrivial($"[{pluginName}] StartHeliPursuit with Heli type '{currentHeliType}'");
 
             // Spawn the heli and pilot
-            heli = new Vehicle((currentHeliType == "cop" ? "polmav" : "maverick"), suspect.GetOffsetPositionUp(100f), suspect.Heading)
+            heli = new Vehicle((currentHeliType == "cop" ? "polmav" : "maverick"), new Vector3(suspect.Position.X, suspect.Position.Y, suspect.Position.Z + 100), suspect.Heading)
             {
                 IsPersistent = true,
                 IsDriveable = false,
