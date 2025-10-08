@@ -18,22 +18,21 @@ namespace HeliView
         static string HELI_TYPE = "cop";
         static string ON_PED_ARREST_BEHAVIOR = "1";
 
+        static bool firstInitialization = true;
         static bool customCameraActive = false;
-        static Camera customCamera = new Camera(false);
+        static Camera customCamera;
         static Vehicle heli = null;
         static Ped heliPilot = null;
         static Ped suspect;
         static int suspectIndex = -1;
         static float FOVsuspectLostOffset = 0;
-        /*static Ped lostSuspectPos = null;
-        static bool suspectLost = false;*/
         static Vehicle playerVehicle;
         static bool playerInVehicle = false;
         static bool playerVehicleWasPersistent = false;
         static string currentHeliType = "";
         static Vector3 playerPosition;
-        static BreakingNews newsScaleform = new BreakingNews();
-        static HeliCam heliCamScaleform = new HeliCam();
+        static BreakingNews newsScaleform;
+        static HeliCam heliCamScaleform;
         static uint lastNewsUpdate = 0;
 
         //Initialization of the plugin.
@@ -167,6 +166,14 @@ namespace HeliView
 
         private static void StartHeliPursuit(bool switching = false)
         {
+            if (firstInitialization)
+            {
+                Game.LogTrivial($"[{pluginName}] First initialization, creating Camera and Scaleforms");
+                firstInitialization = false;
+                customCamera = new Camera(false);
+                newsScaleform = new BreakingNews();
+                heliCamScaleform = new HeliCam();
+            }
             // Selecting suspect
             if (!switching)
             suspect = GetNextSuspect();
