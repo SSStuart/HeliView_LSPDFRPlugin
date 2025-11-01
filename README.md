@@ -11,7 +11,9 @@ During a pursuit, press `CTRL` + `R` to switch to helicopter view. Press again t
 You can adjust some settings in the `.ini` file :
 - If an overlay should be displayed when in the helicopter view.
 - If the player character should be warped in the helicopter.
+    - If not, what should the player character do (nothing, chase the suspect...).
 - The type of helicopter (cop or news team).
+- The behavior when the currently watched suspect was arrested (continue watching, switch to another suspect...).
 <table>
   <tr>
     <td><img alt="News heli camera, car pursuit" src="./screenshots/news1.jpg"></td>

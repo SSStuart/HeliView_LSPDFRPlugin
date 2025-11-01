@@ -3,7 +3,6 @@ using Rage;
 using Rage.Native;
 using System;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace HeliView
@@ -15,6 +14,7 @@ namespace HeliView
 
         static bool ENABLE_OVERLAY = true;
         static bool WARP_PLAYER = true;
+        static string PLAYER_BEHAVIOUR = "0";
         static string HELI_TYPE = "cop";
         static string ON_PED_ARREST_BEHAVIOR = "1";
 
@@ -40,12 +40,13 @@ namespace HeliView
         {
             Functions.OnOnDutyStateChanged += OnOnDutyStateChangedHandler;
  
-            Game.LogTrivial($"{pluginName} Plugin v{pluginVersion} has been initialised.");
+            Game.LogTrivial($"{pluginName} plugin v{pluginVersion} has been initialised.");
             Settings.LoadSettings();
             ENABLE_OVERLAY = Settings.EnableOverlay;
             WARP_PLAYER = Settings.WarpPlayerInHeli;
+            PLAYER_BEHAVIOUR = Settings.PlayerBehaviour;
             HELI_TYPE = Settings.HeliType;
-            ON_PED_ARREST_BEHAVIOR = Settings.onPedArrestBehavior;
+            ON_PED_ARREST_BEHAVIOR = Settings.OnPedArrestBehavior;
             Game.LogTrivial($"Go on duty to fully load {pluginName}.");
 
             UpdateChecker.CheckForUpdates();
@@ -63,6 +64,17 @@ namespace HeliView
         {
             if (OnDuty)
             {
+                Assembly[] allPlugins = Functions.GetAllUserPlugins();
+                foreach (Assembly plugin in allPlugins)
+                {
+                    // Stop the plugin if NewsHeli is installed
+                    if (plugin.FullName.Contains("NewsHeli"))
+                    {
+                        Game.DisplayNotification("mpinventory", "mp_specitem_heli", pluginName, $"V {pluginVersion}", "~r~Disabled! ~w~You are using NewsHeli, which already includes a similar feature.");
+                        return;
+                    }
+                }
+
                 Game.DisplayNotification("mpinventory", "mp_specitem_heli", pluginName, $"V {pluginVersion}", "~g~Loaded successfully !");
 
                 GameFiber.StartNew(MainLoop);
@@ -105,10 +117,10 @@ namespace HeliView
                                 );
                         
                             if (shouldAlwaysStop || shouldStopAuto || (shouldStopNoAuto && !shouldSwitch))
-                        {
+                            {
                                 Game.LogTrivial($"[{pluginName}] Stopping HeliView because {(shouldAlwaysStop ? "the heli is too damaged" : (shouldStopAuto ? "the pursuit ended or the suspect is arrested" : "the suspect does not exist anymore"))}");
-                            StopHeliPursuit();
-                        }
+                                StopHeliPursuit();
+                            }
                             else if (shouldSwitch)
                             {
                                 Game.LogTrivial($"[{pluginName}] Current suspect {(suspect == null || !suspect.Exists() ? "doesn't exist anymore" : " was arrested")}, Switching to remaining pursuit suspect");
@@ -127,10 +139,9 @@ namespace HeliView
                                     string newsText = Functions.GetActivePursuit() != null ? "Pursuit in progress" : "Suspect under arrest";
                                     if (suspect.IsInAnyVehicle(false))
                                     {
-                                        // If the suspect is in a vehicle, try to get the vehicle name and display it (only considering model name with letters)
-                                        string vehName = suspect.CurrentVehicle.Model.Name;
-                                        if (Regex.IsMatch(vehName, @"^[a-z]+$", RegexOptions.IgnoreCase) && !Functions.IsPedArrested(suspect))
-                                            newsText += $". Suspect {(suspect.SeatIndex == -1 ? "driving" : "in")} a {vehName[0].ToString().ToUpper()}{vehName.Substring(1).ToLower()}";
+                                        // If the suspect is in a vehicle, try to get the vehicle name and display it
+                                        string vehName = NativeFunction.Natives.GET_FILENAME_FOR_AUDIO_CONVERSATION<string>(suspect.CurrentVehicle.Model.Name) ?? "car";
+                                        newsText += $". Suspect {(suspect.SeatIndex == -1 ? "driving" : "in")} a {vehName}";
                                     }
                                     // Update the overlay texts with the current area name every 10 seconds
                                     if (lastNewsUpdate < Game.GameTime - 1000 * 10 && suspect != null && suspect.Exists())
@@ -211,7 +222,7 @@ namespace HeliView
                 if (Game.LocalPlayer.Character.CurrentVehicle != null)
                 {
                     playerVehicle = Game.LocalPlayer.Character.CurrentVehicle;
-                    playerVehicle.IsPositionFrozen = true;
+                    playerVehicle.IsPositionFrozen = PLAYER_BEHAVIOUR == "0";
                     playerVehicleWasPersistent = playerVehicle.IsPersistent;
                     playerVehicle.IsPersistent = true;
                     playerInVehicle = true;
@@ -219,14 +230,14 @@ namespace HeliView
                 else if (Game.LocalPlayer.Character.LastVehicle.Exists())
                 {
                     playerVehicle = Game.LocalPlayer.Character.LastVehicle;
-                    playerVehicle.IsPositionFrozen = true;
+                    playerVehicle.IsPositionFrozen = PLAYER_BEHAVIOUR == "0";
                     playerVehicleWasPersistent = playerVehicle.IsPersistent;
                     playerVehicle.IsPersistent = true;
                     playerInVehicle = false;
                 }
                 else
                 {
-                    Game.LocalPlayer.Character.IsPositionFrozen = true;
+                    Game.LocalPlayer.Character.IsPositionFrozen = PLAYER_BEHAVIOUR == "0";
                     playerVehicle = null;
                     playerInVehicle = false;
                 }
@@ -240,7 +251,14 @@ namespace HeliView
             // Warp player in heli (if setting enabled)
             if (WARP_PLAYER)
                 Game.LocalPlayer.Character.WarpIntoVehicle(heli, 0);
-
+            else if (PLAYER_BEHAVIOUR == "2")
+            {
+                Game.LogTrivial($"[{pluginName}] Making player chase the suspect");
+                if (playerInVehicle)
+                    Game.LocalPlayer.Character.Tasks.ChaseWithGroundVehicle(suspect);
+                else
+                    Game.LocalPlayer.Character.Tasks.FollowToOffsetFromEntity(suspect, new Vector3(-20, 0, 0));
+            }
             // Setup the custom camera
             customCamera.AttachToEntity(heli, new Vector3(0, 1, -2), true);
             customCamera.PointAtEntity(suspect, new Vector3(), true);
@@ -299,24 +317,47 @@ namespace HeliView
                 Game.FadeScreenOut(500);
                 GameFiber.Wait(500);
             }
-                if (ENABLE_OVERLAY)
-                    NativeFunction.Natives.DISPLAY_RADAR(true);
+            if (ENABLE_OVERLAY)
+                NativeFunction.Natives.DISPLAY_RADAR(true);
             if (!switching)
             {
-                // If the player had an active vehicle
-                if (playerVehicle != null && playerVehicle.Exists())
+                if (PLAYER_BEHAVIOUR == "0")
                 {
-                    // Restore player vehicle attributes, and warp player back in it (if the player was in the vehicle), or just reposition the player on foot
-                    playerVehicle.IsPositionFrozen = false;
-                    playerVehicle.IsPersistent = playerVehicleWasPersistent;
-                    if (WARP_PLAYER && playerInVehicle)
-                        Game.LocalPlayer.Character.WarpIntoVehicle(playerVehicle, -1);
-                    else if (WARP_PLAYER && !playerInVehicle)
+                    // If the player had an active vehicle
+                    if (playerVehicle != null && playerVehicle.Exists())
+                    {
+                        // Restore player vehicle attributes, and warp player back in it (if the player was in the vehicle), or just reposition the player on foot
+                        playerVehicle.IsPositionFrozen = false;
+                        playerVehicle.IsPersistent = playerVehicleWasPersistent;
+                        if (WARP_PLAYER && playerInVehicle)
+                            Game.LocalPlayer.Character.WarpIntoVehicle(playerVehicle, -1);
+                        else if (WARP_PLAYER && !playerInVehicle)
+                            Game.LocalPlayer.Character.Position = playerPosition;
+                    }
+                    // If the player had no vehicle, just reposition the player on foot (if the player position is defined)
+                    else if (playerPosition != null && playerPosition != Vector3.Zero)
                         Game.LocalPlayer.Character.Position = playerPosition;
+                } else if (PLAYER_BEHAVIOUR == "1")
+                {
+                    Game.LogTrivial($"[{pluginName}] Teleporting player near suspect");
+                    Vector3 positionAroundEnd = World.GetNextPositionOnStreet((suspect.Exists() ? suspect.GetOffsetPositionFront(-100f) : heli.Position.Around2D(200f)));
+                    if (playerVehicle != null && playerVehicle.Exists())
+                    {
+                        playerVehicle.Position = positionAroundEnd;
+                        playerVehicle.Face(suspect);
+                        playerVehicle.IsPositionFrozen = false;
+                        playerVehicle.IsPersistent = playerVehicleWasPersistent;
+                        if (playerInVehicle)
+                            Game.LocalPlayer.Character.WarpIntoVehicle(playerVehicle, -1);
+                        else
+                            Game.LocalPlayer.Character.Position = positionAroundEnd.Around2D(5f);
+
+                    }
+                } else
+                {
+                    Game.LogTrivial($"[{pluginName}] Stopping player tasks");
+                    Game.LocalPlayer.Character.Tasks.Clear();
                 }
-                // If the player had no vehicle, just reposition the player on foot (if the player position is defined)
-                else if (playerPosition != null && playerPosition != Vector3.Zero)
-                    Game.LocalPlayer.Character.Position = playerPosition;
             }
             // Restore player control and attributes
             Game.LocalPlayer.Character.IsInvincible = false;
