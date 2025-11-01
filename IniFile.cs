@@ -30,6 +30,11 @@ namespace HeliView
             {
                 Game.LogTrivial($"- Player behaviour while camera active: {(PlayerBehaviour == "0" ? "Do nothing" : (PlayerBehaviour == "1" ? "Teleport closer on end" : "Make the player chase the suspect" ))}");
             }
+            else if (WarpPlayerInHeli)
+            {
+                PlayerBehaviour = "0";
+                Game.LogTrivial($"- Player behaviour while camera active: Setting ignored, WarpPlayerInHeli is true.");
+            }
             else
             {
                 PlayerBehaviour = "0";
