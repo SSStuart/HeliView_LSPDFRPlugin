@@ -89,7 +89,7 @@ namespace HeliView
                 GameFiber.Yield();
                 GameFiber.Sleep(5000);
             } while (Game.IsLoading);
-            Game.DisplayNotification("mpturf", "swap", Main.pluginName, $"V {lastVersion}", $"~y~Update available !");
+            Game.DisplayNotification("mpturf", "swap", Main.pluginName, $"V {lastVersion}", Main.l10n.GetString("updateAvailable"));
         }
     }
 }

@@ -1,6 +1,4 @@
-﻿
-
-using Rage;
+﻿using Rage;
 using System.Text.RegularExpressions;
 
 namespace HeliView
@@ -18,7 +16,7 @@ namespace HeliView
 
         internal static void LoadSettings()
         {
-            Game.LogTrivial($"[{Main.pluginName}]: Loading config file:");
+            Game.LogTrivial($"[{Main.pluginName}] Loading config file:");
 
             ini.Create();
             EnableOverlay = ini.ReadBoolean("Settings", "EnableOverlay", true);

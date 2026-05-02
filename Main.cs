@@ -11,6 +11,7 @@ namespace HeliView
     {
         public static string pluginName = "HeliView";
         public static string pluginVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
+        public static Localization l10n = new Localization();
 
         static bool ENABLE_OVERLAY = true;
         static bool WARP_PLAYER = true;
@@ -70,12 +71,12 @@ namespace HeliView
                     // Stop the plugin if NewsHeli is installed
                     if (plugin.FullName.Contains("NewsHeli"))
                     {
-                        Game.DisplayNotification("mpinventory", "mp_specitem_heli", pluginName, $"V {pluginVersion}", "~r~Disabled! ~w~You are using NewsHeli, which already includes a similar feature.");
+                        Game.DisplayNotification("mpinventory", "mp_specitem_heli", pluginName, $"V {pluginVersion}", l10n.GetString("newsHeliIncompatible"));
                         return;
                     }
                 }
 
-                Game.DisplayNotification("mpinventory", "mp_specitem_heli", pluginName, $"V {pluginVersion}", "~g~Loaded successfully !");
+                Game.DisplayNotification("mpinventory", "mp_specitem_heli", pluginName, $"V {pluginVersion}", l10n.GetString("loaded"));
 
                 GameFiber.StartNew(MainLoop);
 
@@ -126,6 +127,12 @@ namespace HeliView
                                 Game.LogTrivial($"[{pluginName}] Current suspect {(suspect == null || !suspect.Exists() ? "doesn't exist anymore" : " was arrested")}, Switching to remaining pursuit suspect");
                                 SwitchSuspect();
                             }
+
+                            if (customCameraActive && Functions.GetActivePursuit() == null && heliPilot.Exists() && heliPilot.Tasks.CurrentTaskStatus == TaskStatus.NoTask && suspect.Exists())
+                            {
+                                Game.LogTrivial($"[{pluginName}] Pursuit ended, making the pilot chase the current suspect");
+                                heliPilot.Tasks.ChaseWithHelicopter(suspect, new Vector3(((float)Math.Sin(Game.GameTime / 1000) * 100f), ((float)Math.Sin(Game.GameTime / 1000) * -10f - 20f), 70f));
+                            }
                         }
 
                         // UPDATE CAMERA FOV and OVERLAY
@@ -136,12 +143,12 @@ namespace HeliView
                                 if (currentHeliType == "news")
                                 {
                                     // If News heli, display the news overlay
-                                    string newsText = Functions.GetActivePursuit() != null ? "Pursuit in progress" : "Suspect under arrest";
+                                    string newsText = Functions.GetActivePursuit() != null ? l10n.GetString("pursuitInProgress") : l10n.GetString("suspectUnderArrest");
                                     if (suspect.IsInAnyVehicle(false))
                                     {
                                         // If the suspect is in a vehicle, try to get the vehicle name and display it
-                                        string vehName = NativeFunction.Natives.GET_FILENAME_FOR_AUDIO_CONVERSATION<string>(suspect.CurrentVehicle.Model.Name) ?? "car";
-                                        newsText += $". Suspect {(suspect.SeatIndex == -1 ? "driving" : "in")} a {vehName}";
+                                        string vehName = NativeFunction.Natives.GET_FILENAME_FOR_AUDIO_CONVERSATION<string>(suspect.CurrentVehicle.Model.Name) ?? l10n.GetString("vehicle");
+                                        newsText += suspect.SeatIndex == -1 ? l10n.GetString("suspectVehicleDriver", ("vehicle", vehName)) : l10n.GetString("suspectVehiclePassenger", ("vehicle", vehName));
                                     }
                                     // Update the overlay texts with the current area name every 10 seconds
                                     if (lastNewsUpdate < Game.GameTime - 1000 * 10 && suspect != null && suspect.Exists())
@@ -274,8 +281,7 @@ namespace HeliView
             GameFiber.Wait(2000);
             Game.FadeScreenIn(500);
 
-            Game.DisplayHelp("~b~Ctrl + R~w~ : Exit HeliView\n" +
-                "~b~Ctrl+Shift + R~w~ : Toggle suspect");
+            Game.DisplayHelp(l10n.GetString("controlsHelp"));
         }
 
         private static void SwitchSuspect()
